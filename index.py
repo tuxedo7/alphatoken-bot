@@ -15,19 +15,19 @@ NETWORK = os.getenv("NETWORK", "finney")  # test, finney, or main
 SUBNET_ID = int(os.getenv("SUBNET_ID", "71"))  # Subnet to stake on
 VALIDATOR_HOTKEY_RAW = os.getenv("VALIDATOR_HOTKEY", "").strip()  # Optional: specific validator hotkey
 STAKE_AMOUNT_TAO = float(os.getenv("STAKE_AMOUNT_TAO", "1"))  # Amount of TAO to stake
-CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "20"))  # Check stake every N seconds
+CHECK_INTERVAL = int(os.getenv("CHECK_INTERVAL", "10"))  # Check stake every N seconds
 
 # Trading Strategy Configuration
-PROFIT_THRESHOLD = float(os.getenv("PROFIT_THRESHOLD", "0.5"))  # Unstake when profit >= X% (in TAO)
+PROFIT_THRESHOLD = float(os.getenv("PROFIT_THRESHOLD", "1.0"))  # Unstake when profit >= X% (in TAO)
 BUY_THRESHOLD = float(os.getenv("BUY_THRESHOLD", "-1.0"))  # Stake when price drops X% from entry
 SELL_THRESHOLD = float(os.getenv("SELL_THRESHOLD", "0.5"))  # Unstake when price rises X% from entry
-PROFIT_COMPARISON_THRESHOLD = float(os.getenv("PROFIT_COMPARISON_THRESHOLD", "2.0"))  # Unstake when recent profit is X% higher than previous profit
+PROFIT_COMPARISON_THRESHOLD = float(os.getenv("PROFIT_COMPARISON_THRESHOLD", "3.0"))  # Unstake when recent profit is X% higher than previous profit
 
 # Price Protection Configuration (Strict Safe Mode by default)
 # See: https://docs.learnbittensor.org/learn/price-protection
 SAFE_STAKING = os.getenv("SAFE_STAKING", "true").lower() == "true"  # Enable price protection (default: True)
 ALLOW_PARTIAL_STAKE = os.getenv("ALLOW_PARTIAL_STAKE", "false").lower() == "true"  # Allow partial execution (default: False - Strict mode)
-RATE_TOLERANCE = float(os.getenv("RATE_TOLERANCE", "0.02"))  # Price tolerance: 0.02 = 2% (default: 2%)
+RATE_TOLERANCE = float(os.getenv("RATE_TOLERANCE", "0.004"))  # Price tolerance: 0.02 = 2% (default: 2%)
 
 # Minimum transaction amount (0.0005 TAO)
 MIN_STAKE_AMOUNT = 0.0005
@@ -273,7 +273,7 @@ class StakeTracker:
             
             # Check if price is dropping from peak
             if price_change_percent < self.tmp:
-                if price_change_percent > self.tmp - 0.5 and price_change_percent > SELL_THRESHOLD:
+                if price_change_percent > self.tmp - SELL_THRESHOLD and price_change_percent > SELL_THRESHOLD:
                     should_sell = True
                     reason = f"Price dropping from peak ({self.tmp:.2f}% -> {price_change_percent:.2f}%, above {SELL_THRESHOLD}% threshold)"
             
@@ -288,7 +288,7 @@ class StakeTracker:
             if self.previous_profit is not None:
                 print(f"Previous profit: {self.previous_profit:.2f}%, Profit increase: {profit_percent - self.previous_profit:.2f}%")
             
-            
+            should_sell = False
             
             if should_sell:
                 print(f"\n🎯 SELL SIGNAL: {reason}")
@@ -736,6 +736,9 @@ async def main():
         print(f"\n🔍 Checking for existing stakes on subnet {SUBNET_ID}...")
         try:
             all_stakes = await subtensor.get_stake_for_coldkey(wallet.coldkeypub.ss58_address)
+            # Handle None case - treat as empty list
+            if all_stakes is None:
+                all_stakes = []
             # Filter stakes for this subnet
             subnet_stakes = [s for s in all_stakes if s and s.netuid == SUBNET_ID]
             
